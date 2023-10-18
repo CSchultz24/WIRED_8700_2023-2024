@@ -6,6 +6,7 @@
 package frc.robot;
 
 //import edu.wpi.first.wpilibj.GenericHID;
+import edu.wpi.first.math.kinematics.ChassisSpeeds;
 import edu.wpi.first.wpilibj.Joystick;
 import edu.wpi.first.wpilibj.TimedRobot;
 import edu.wpi.first.wpilibj.drive.DifferentialDrive;
@@ -119,7 +120,7 @@ private final SendableChooser<String> m_chooser = new SendableChooser<>();
     camera2.setVideoMode(PixelFormat.kYUYV, 160, 120, 30);
 
     //set up auton chooser
-
+    // driveTheRobotPlease();
    
     m_chooser.addOption("Wave one time test auto", testAuto2);
     m_chooser.addOption("Wave two times test auto", testAuto1);
