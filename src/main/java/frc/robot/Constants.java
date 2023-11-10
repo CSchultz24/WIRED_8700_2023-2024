@@ -237,52 +237,6 @@ public final class Constants {
 
   }
 
-  public static class VisionConstants {
 
-    /**
-     * Physical location of the camera on the robot, relative to the center of the
-     * robot.
-     */
-    public static final Transform2d CAMERA_TO_ROBOT = new Transform2d(new Translation2d(-0.3425, 0.0),
-        new Rotation2d(0.0));
 
-    public static final Transform3d CAMERA_TO_ROBOT3 = new Transform3d();
-
-    // 15"up and 15"forward
-
-    private static double camHeight = Units.inchesToMeters(15);
-
-    public static double camXFromCenter = -Units.inchesToMeters(15);
-
-    public static String cameraName = "front";
-
-    public static final Transform3d CAMERA_TO_ROBOT_3D = new Transform3d(
-        new Translation3d(camXFromCenter, 0.0, camHeight),
-        new Rotation3d());
-  }
-
-  public static final class LEDConstants {
-    public static final int LED_CONTROLLER_PORT = 1;
-  }
-
-  public static class LoadStationPickupConstants {
-
-    static Pose2d aprilTag5 = FieldConstants2023.aprilTags.get(5).toPose2d();
-
-    static Transform2d rightPickupT2d = new Transform2d(new Translation2d(0, .8), new Rotation2d());
- 
-    static Transform2d leftPickupT2d = new Transform2d(new Translation2d(0, -.8), new Rotation2d());
-
-    public static Pose2d blueLeftTarget = aprilTag5.plus(rightPickupT2d);
-
-    public static Pose2d blueRightTarget = aprilTag5.plus(leftPickupT2d);
-
-    static Pose2d aprilTag6 = FieldConstants2023.aprilTags.get(6).toPose2d();
-
-   
-    public static Pose2d redLeftTarget = aprilTag6.plus(rightPickupT2d);
-
-    public static Pose2d redRightTarget = aprilTag6.plus(leftPickupT2d);
-
-  }
 }
