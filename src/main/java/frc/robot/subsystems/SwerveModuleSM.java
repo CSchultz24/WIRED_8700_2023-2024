@@ -1,5 +1,12 @@
+// Copyright (c) FIRST and other WPILib contributors.
+// Open Source Software; you can modify and/or share it under the terms of
+// the WPILib BSD license file in the root directory of this project.
+
 package frc.robot.subsystems;
 
+import java.sql.Driver;
+
+import com.ctre.phoenix.sensors.CANCoder;
 import com.revrobotics.CANSparkMax;
 import com.revrobotics.CANSparkMax.IdleMode;
 import com.revrobotics.CANSparkMaxLowLevel;
@@ -18,15 +25,15 @@ import edu.wpi.first.wpilibj.RobotBase;
 import edu.wpi.first.wpilibj.RobotController;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
-import frc.robot.CTRECanCoder;
 import frc.robot.Constants.CurrentLimitConstants;
 import frc.robot.Constants.DriveConstants;
+import frc.robot.Constants.DriveConstants.ModulePosition;
+import frc.robot.oi.ShuffleboardContent;
 import frc.robot.Constants.ModuleConstants;
 import frc.robot.Constants.ModuleTuneConstants;
 import frc.robot.Constants.SYSIDConstants;
 import frc.robot.Pref;
 import frc.robot.utils.AngleUtils;
-import frc.robot.utils.ShuffleboardContent;
 
 public class SwerveModuleSM extends SubsystemBase {
 
@@ -46,13 +53,14 @@ public class SwerveModuleSM extends SubsystemBase {
   private PIDController m_turnPosController = new PIDController(ModuleTuneConstants.kPModuleTurningController,
       ModuleTuneConstants.kIModuleTurningController, ModuleTuneConstants.kDModuleTurningController);
 
-  public final CTRECanCoder m_turnCANcoder;
+  public final CANCoder m_turnCANcoder;
 
   SwerveModuleState state;
 
   public int m_moduleNumber;
 
   public String[] modAbrev = { "FL ", "FR ", "RL ", "RR " };
+
   String driveLayout;
 
   String turnLayout;
@@ -80,17 +88,30 @@ public class SwerveModuleSM extends SubsystemBase {
   public boolean driveMotorConnected;
   public boolean turnMotorConnected;
   public boolean turnCoderConnected;
-  public boolean showOnShuffleboard = false;
 
   public SendableBuilder m_builder;
 
-  private boolean m_isOpenLoop;
+  public boolean m_isOpenLoop;
 
   public boolean driveBrakeMode;
 
   public boolean turnBrakeMode;
 
   private int tst;
+
+  public boolean isRotating;
+
+  private double simAngle;
+
+  private int moduleFaultSeen;
+
+  public boolean test = true;
+
+  public ModulePosition m_modulePosition;// enum with test module names;
+
+  private int moduleStickyFaultSeen;
+
+  public double angleCorrection;
 
   /**
    * Constructs a SwerveModule.
@@ -110,14 +131,11 @@ public class SwerveModuleSM extends SubsystemBase {
       int cancoderCanChannel,
       boolean driveMotorReversed,
       boolean turningMotorReversed,
-      int pdpCDrivehannel,
+      int pdpDriveChannel,
       int pdpTurnChannel,
-      boolean isOpenLoop,
       double turningEncoderOffset) {
 
     m_locationIndex = locationIndex;
-
-    m_isOpenLoop = isOpenLoop;
 
     m_driveMotor = new CANSparkMax(driveMotorCanChannel, MotorType.kBrushless);
 
@@ -136,7 +154,7 @@ public class SwerveModuleSM extends SubsystemBase {
     m_turnMotor.enableVoltageCompensation(ModuleConstants.kVoltCompensation);
 
     // absolute encoder used to establish known wheel position on start position
-    m_turnCANcoder = new CTRECanCoder(cancoderCanChannel);
+    m_turnCANcoder = new CANCoder(cancoderCanChannel);
     m_turnCANcoder.configFactoryDefault();
     m_turnCANcoder.configAllSettings(AngleUtils.generateCanCoderConfig());
     m_turnEncoderOffset = turningEncoderOffset;
@@ -145,15 +163,6 @@ public class SwerveModuleSM extends SubsystemBase {
 
     m_turnMotor.setInverted(turningMotorReversed);
 
-    m_driveMotor.setPeriodicFramePeriod(CANSparkMaxLowLevel.PeriodicFrame.kStatus0, 100);
-    m_driveMotor.setPeriodicFramePeriod(CANSparkMaxLowLevel.PeriodicFrame.kStatus1, 20);
-    m_driveMotor.setPeriodicFramePeriod(CANSparkMaxLowLevel.PeriodicFrame.kStatus2, 20);
-    // Set neutral mode to brake
-    m_driveMotor.setIdleMode(CANSparkMax.IdleMode.kBrake);
-
-    m_turnMotor.setPeriodicFramePeriod(CANSparkMaxLowLevel.PeriodicFrame.kStatus0, 10);
-    m_turnMotor.setPeriodicFramePeriod(CANSparkMaxLowLevel.PeriodicFrame.kStatus1, 20);
-    m_turnMotor.setPeriodicFramePeriod(CANSparkMaxLowLevel.PeriodicFrame.kStatus2, 50);
     // Set neutral mode to brake
     m_turnMotor.setIdleMode(CANSparkMax.IdleMode.kBrake);
 
@@ -168,22 +177,17 @@ public class SwerveModuleSM extends SubsystemBase {
 
     m_turnEncoder.setPositionConversionFactor(ModuleConstants.kTurningDegreesPerEncRev);
 
+    SmartDashboard.putNumber("TDPR", ModuleConstants.kTurningDegreesPerEncRev);
+
     m_turnEncoder.setVelocityConversionFactor(ModuleConstants.kTurningDegreesPerEncRev / 60);
 
     m_turnPosController.enableContinuousInput(-180, 180);
 
-    checkCAN();
+    // checkCAN();
+
+    setCANTimes();
 
     resetAngleToAbsolute();
-
-    if (showOnShuffleboard) {
-
-      ShuffleboardContent.initDriveShuffleboard(this);
-      ShuffleboardContent.initTurnShuffleboard(this);
-      ShuffleboardContent.initCANCoderShuffleboard(this);
-      ShuffleboardContent.initBooleanShuffleboard(this);
-      ShuffleboardContent.initCoderBooleanShuffleboard(this);
-    }
 
     if (RobotBase.isSimulation()) {
 
@@ -202,11 +206,22 @@ public class SwerveModuleSM extends SubsystemBase {
       m_turnPosController.setP(.01);
 
     }
-
+    ShuffleboardContent.initDriveShuffleboard(this);
+    ShuffleboardContent.initTurnShuffleboard(this);
+    ShuffleboardContent.initCANCoderShuffleboard(this);
+    ShuffleboardContent.initBooleanShuffleboard(this);
+    ShuffleboardContent.initCoderBooleanShuffleboard(this);
   }
 
   @Override
   public void periodic() {
+
+    if (moduleFaultSeen == 0)
+      moduleFaultSeen = getFaults();
+
+    if (moduleStickyFaultSeen == 0)
+      moduleStickyFaultSeen = getStickyFaults();
+
 
     if (Pref.getPref("SwerveTune") == 1 && tuneOn == 0) {
 
@@ -215,6 +230,7 @@ public class SwerveModuleSM extends SubsystemBase {
       tunePosGains();
 
       tuneDriveVelGains();
+
     }
 
     if (tuneOn == 1) {
@@ -222,19 +238,16 @@ public class SwerveModuleSM extends SubsystemBase {
       tuneOn = (int) Pref.getPref("SwerveTune");
     }
 
-    if (m_turnCANcoder.getFaulted()) {
-      // SmartDashboard.putStringArray("CanCoderFault"
-      // + m_modulePosition.toString(), m_turnCANcoder.getFaults());
-      SmartDashboard.putStringArray("CanCoderStickyFault"
-          + String.valueOf(m_locationIndex), m_turnCANcoder.getStickyFaults());
-
-    }
   }
 
   @Override
   public void simulationPeriodic() {
 
     REVPhysicsSim.getInstance().run();
+
+    if (getTurnAngleDegs() != angle) {
+      simAngle += (angle - getTurnAngleDegs()) / 4;
+    }
   }
 
   public SwerveModuleState getState() {
@@ -242,8 +255,24 @@ public class SwerveModuleSM extends SubsystemBase {
     return new SwerveModuleState(getDriveVelocity(), Rotation2d.fromDegrees((getTurnAngleDegs())));
   }
 
+  public double[] getMeasuredState() {
+    double[] temp = { 0, 0 };
+    temp[0] = getState().angle.getDegrees();
+    temp[1] = getState().speedMetersPerSecond;
+    return temp;
+  }
+
   public SwerveModulePosition getPosition() {
     return new SwerveModulePosition(getDrivePosition(), getHeadingRotation2d());
+  }
+
+  public double[] getDesiredState() {
+    double[] temp = { 0, 0 };
+    if (state != null) {
+      temp[0] = state.angle.getDegrees();
+      temp[1] = state.speedMetersPerSecond;
+    }
+    return temp;
   }
 
   /**
@@ -255,9 +284,9 @@ public class SwerveModuleSM extends SubsystemBase {
 
     state = AngleUtils.optimize(desiredState, getHeadingRotation2d());
 
-    SmartDashboard.putNumber("StateSpeed", state.speedMetersPerSecond);
+    // SmartDashboard.putNumber("StateSpeed", state.speedMetersPerSecond);
 
-    SmartDashboard.putNumber("StateDegs", state.angle.getDegrees());
+    // SmartDashboard.putNumber("StateDegs", state.angle.getDegrees());
 
     // turn motor code
     // Prevent rotating module if speed is less then 1%. Prevents Jittering.
@@ -272,43 +301,53 @@ public class SwerveModuleSM extends SubsystemBase {
 
     m_lastAngle = angle;
 
-    SmartDashboard.putNumber("TESTSP", state.speedMetersPerSecond);
-
-    driveMotorMove(state.speedMetersPerSecond);
-
-    positionTurn(angle);
-
-  }
-
-  public void driveMotorMove(double speed) {
-
     if (m_isOpenLoop) {
-      m_driveMotor
-          .setVoltage(RobotController.getBatteryVoltage() * speed / DriveConstants.kPhysicalMaxSpeedMetersPerSecond);
 
-      SmartDashboard.putNumber("DrFF Volts", feedforward.calculate(speed));
-
-      // m_driveMotor.setVoltage(feedforward.calculate(speed));
+      driveMotorMoveOpenLoop(state.speedMetersPerSecond / DriveConstants.kMaxSpeedMetersPerSecond);
 
     } else {
 
-      m_driveMotor.setVoltage(feedforward.calculate(speed)
-          + m_driveVelController.calculate(getDriveVelocity(), speed));
-
+      driveMotorMoveVelocity(state.speedMetersPerSecond);
     }
+
+    positionTurn(angle + angleCorrection);
+
+  }
+
+  public double getDriveSpeedSetpoint() {
+    if (RobotBase.isReal())
+      return state.speedMetersPerSecond;
+    else
+      return 0;
+  }
+
+  public void driveMotorMoveOpenLoop(double speed) {
+
+    m_driveMotor.setVoltage(RobotController.getBatteryVoltage() * speed);
+
+  }
+
+  public void driveMotorMoveVelocity(double speedMPS) {
+
+    m_driveMotor
+
+        .setVoltage(feedforward.calculate(speedMPS) +
+
+            m_driveVelController.calculate(getDriveVelocity(), speedMPS));
+
   }
 
   public void positionTurn(double angle) {
 
     double pidOut = m_turnPosController.calculate(getTurnAngleDegs(), angle);
 
-    SmartDashboard.putNumber("PIDOUT", pidOut);
+    // SmartDashboard.putNumber("PIDOUT", pidOut);
 
     double turnAngleError = Math.abs(angle - getTurnAngleDegs());
 
-    SmartDashboard.putNumber("ATAE", turnAngleError);
+    // SmartDashboard.putNumber("ATAE", turnAngleError);
 
-    SmartDashboard.putNumber("TEST", tst++);
+    // SmartDashboard.putNumber("TEST", tst++);
 
     // if robot is not moving, stop the turn motor oscillating
     // if (turnAngleError < turnDeadband
@@ -344,6 +383,15 @@ public class SwerveModuleSM extends SubsystemBase {
     m_pose = pose;
   }
 
+  public ModulePosition getModulePosition() {
+
+    return m_modulePosition;
+  }
+
+  public String getModuleName(int n) {
+    return DriveConstants.moduleNames[n];
+  }
+
   public void setDriveBrakeMode(boolean on) {
     driveBrakeMode = on;
     if (on)
@@ -372,7 +420,7 @@ public class SwerveModuleSM extends SubsystemBase {
     if (RobotBase.isReal())
       return m_turnEncoder.getPosition();
     else
-      return angle;
+      return simAngle;
     // return m_turnEncoder.getPosition() *
     // ModuleConstants.kTurningDegreesPerEncRev;
 
@@ -399,20 +447,41 @@ public class SwerveModuleSM extends SubsystemBase {
 
   }
 
+  public double getDriveAppliedOutput() {
+    if (RobotBase.isReal())
+      return m_driveMotor.getAppliedOutput();
+    else
+      return 0;
+  }
+
   public double getDriveCurrent() {
-    return m_driveMotor.getOutputCurrent();
+    if (RobotBase.isReal())
+      return m_driveMotor.getOutputCurrent();
+    else
+      return 0;
   }
 
   public double getTurnVelocity() {
     if (RobotBase.isReal())
       return m_turnEncoder.getVelocity();
     else
-      return (m_turnEncoder.getVelocity() * ModuleConstants.kTurningDegreesPerEncRev) / 60;
+      return 0;// (m_turnEncoder.getVelocity() * ModuleConstants.kTurningDegreesPerEncRev) /
+               // 60;
 
   }
 
   public double getTurnCurrent() {
-    return m_turnMotor.getOutputCurrent();
+    if (RobotBase.isReal())
+      return m_turnMotor.getOutputCurrent();
+    else
+      return 0;
+  }
+
+  public double getTurnAppliedOutput() {
+    if (RobotBase.isReal())
+      return m_turnMotor.getAppliedOutput();
+    else
+      return 0;
   }
 
   public boolean turnInPosition(double targetAngle) {
@@ -420,18 +489,34 @@ public class SwerveModuleSM extends SubsystemBase {
   }
 
   public boolean turnIsStopped() {
+    if (RobotBase.isReal())
+      return Math.abs(m_turnEncoder.getVelocity()) < tolDegPerSec;
+    else
+      return false;
+  }
 
-    return Math.abs(m_turnEncoder.getVelocity()) < tolDegPerSec;
+  public int getFaults() {
+    return m_driveMotor.getFaults() + m_turnMotor.getFaults();// || m_turnCANcoder.getFaulted();
+  }
+
+  public int getStickyFaults() {
+    return m_driveMotor.getStickyFaults() + m_turnMotor.getStickyFaults();
+  }
+
+  public void clearFaults() {
+    m_driveMotor.clearFaults();
+    m_turnMotor.clearFaults();
+    m_turnCANcoder.clearStickyFaults();
+    moduleFaultSeen = 0;
+    moduleStickyFaultSeen = 0;
+
   }
 
   public boolean checkCAN() {
-
-    driveMotorConnected = m_driveMotor.getFirmwareVersion() != 0;
-    turnMotorConnected = m_turnMotor.getFirmwareVersion() != 0;
-    turnCoderConnected = m_turnCANcoder.getFirmwareVersion() > 0;
-
-    return driveMotorConnected && turnMotorConnected && turnCoderConnected;
-
+    driveMotorConnected = m_driveMotor.getFirmwareVersion() != 0 || RobotBase.isSimulation();
+    turnMotorConnected = m_turnMotor.getFirmwareVersion() != 0 || RobotBase.isSimulation();
+    turnCoderConnected = m_turnCANcoder.getFirmwareVersion() > 0 || RobotBase.isSimulation();
+    return RobotBase.isSimulation() || (driveMotorConnected && turnMotorConnected && turnCoderConnected);
   }
 
   public void stop() {
@@ -450,6 +535,20 @@ public class SwerveModuleSM extends SubsystemBase {
     m_driveVelController.setP(Pref.getPref("SwerveVelkP"));
     m_driveVelController.setI(Pref.getPref("SwerveVelkI"));
     m_driveVelController.setD(Pref.getPref("SwerveVelkD"));
+
+  }
+
+  private void setCANTimes() {
+
+    m_driveMotor.setPeriodicFramePeriod(CANSparkMaxLowLevel.PeriodicFrame.kStatus0, 100);
+    m_driveMotor.setPeriodicFramePeriod(CANSparkMaxLowLevel.PeriodicFrame.kStatus1, 20);
+    m_driveMotor.setPeriodicFramePeriod(CANSparkMaxLowLevel.PeriodicFrame.kStatus2, 20);
+    // Set neutral mode to brake
+    m_driveMotor.setIdleMode(CANSparkMax.IdleMode.kBrake);
+
+    m_turnMotor.setPeriodicFramePeriod(CANSparkMaxLowLevel.PeriodicFrame.kStatus0, 10);
+    m_turnMotor.setPeriodicFramePeriod(CANSparkMaxLowLevel.PeriodicFrame.kStatus1, 20);
+    m_turnMotor.setPeriodicFramePeriod(CANSparkMaxLowLevel.PeriodicFrame.kStatus2, 50);
 
   }
 

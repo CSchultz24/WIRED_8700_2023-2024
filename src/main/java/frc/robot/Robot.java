@@ -6,23 +6,16 @@
 package frc.robot;
 
 //import edu.wpi.first.wpilibj.GenericHID;
-import edu.wpi.first.math.kinematics.ChassisSpeeds;
-import edu.wpi.first.wpilibj.Joystick;
+import edu.wpi.first.wpilibj.DataLogManager;
+import edu.wpi.first.wpilibj.DriverStation;
+import edu.wpi.first.wpilibj.RobotBase;
 import edu.wpi.first.wpilibj.TimedRobot;
-import edu.wpi.first.wpilibj.drive.DifferentialDrive;
-import edu.wpi.first.wpilibj.motorcontrol.MotorControllerGroup;
-import edu.wpi.first.wpilibj.XboxController;
-import com.revrobotics.CANSparkMax;
-import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
-import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj.Timer;
-import edu.wpi.first.cameraserver.CameraServer;
-import edu.wpi.first.cscore.UsbCamera;
-import edu.wpi.first.cscore.VideoSink;
-import edu.wpi.first.cscore.VideoMode.PixelFormat;
-import edu.wpi.first.math.MathUtil;
-import edu.wpi.first.math.controller.PIDController;
-import com.revrobotics.CANSparkMax.IdleMode;
+import edu.wpi.first.wpilibj.shuffleboard.Shuffleboard;
+import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
+import edu.wpi.first.wpilibj2.command.Command;
+import edu.wpi.first.wpilibj2.command.CommandScheduler;
+
 /**
  * The VM is configured to automatically run this class. If you change the name
  * of this class or the package after creating this project, you must also
@@ -31,231 +24,177 @@ import com.revrobotics.CANSparkMax.IdleMode;
 // public class Robot extends RobotBase { // old extension.
 public class Robot extends TimedRobot {
 
-  // define and initialize some variables for the sample robot
+  private RobotContainer m_robotContainer;
 
-  // Define left drivetrain Motors
-  MotorControllerGroup m_left;
+  private double m_disableStartTime;
 
-  // define right drivetrain motors
-  MotorControllerGroup m_right;
+  private boolean driveIsBraked;
 
-  // define strafe motor
- MotorControllerGroup m_strafe;
+  public static int lpctra;
 
+  private int loopCtr;
 
+  private boolean lastOKState;
 
+  private boolean firstScan = true;
 
-  // define the drive
-  DifferentialDrive m_drive;
+  private boolean autoHasRun;
+  private double m_startDelay;
+  private double startTime;
+  Command autonomousCommand;
 
-  DifferentialDrive m_strafeDrive;
-  // define the external encoders used for the drivetrain
-
-
-  // define the joystick and xbox controller used to controll the robot
-  Joystick m_joyStick;
-  XboxController m_Controller_1;
-  XboxController m_Controller_2;
-
-  // define the camera
-  UsbCamera camera1;
-  UsbCamera camera2;
-  // NetworkTableEntry cameraSelection;
-  VideoSink server;
-
-  //Auton chooser on smart dashboard
-
-
-private static final String testAuto1 = "wave two times test";
-private static final String testAuto2 = "wave one time test"; 
-
-private String m_autoSelected;
-private final SendableChooser<String> m_chooser = new SendableChooser<>();
-
-  // define timer
-  Timer m_timer = new Timer();
-
-
-  //define CAN
-  //potential swerve drive stuff
-  // CANSparkMax leftFrontSteeringMotor;
-  // CANSparkMax leftFrontDriveMotor;
-  // CANSparkMax leftRearSteeringMotor;
-  // CANSparkMax leftRearDriveMotor;
-  // CANSparkMax rightFrontSteeringMotor;
-  // CANSparkMax rightFrontDriveMotor;
-  // CANSparkMax rightRearSteeringMotor;
-  // CANSparkMax rightRearDriveMotor;
-  
-  //define drive train under can
-  CANSparkMax m_frontLeft;
-  CANSparkMax m_rearLeft;
-  CANSparkMax m_frontRight;
-  CANSparkMax m_rearRight;
-
-  CANSparkMax m_rightStrafeMotor;
-  CANSparkMax m_leftStafeMotor;
-  boolean strafeMode;
-  CANSparkMax m_armMotor;
-  CANSparkMax m_extendoArm;
-
-
-
- 
-
- //state machine initialization
- double state = 0;
-
-
-
-
+  /**
+   * This function is run when the robot is first started up and should be used
+   * for any
+   * initialization code.
+   */
+  @Override
   public void robotInit() {
-    // setup the camera
-    camera1 = CameraServer.startAutomaticCapture(0);
-    camera2 = CameraServer.startAutomaticCapture(1);
-    server = CameraServer.getServer();
-    //camera1.setResolution(160, 120);
-    //camera2.setResolution(160, 120);
-    camera1.setVideoMode(PixelFormat.kYUYV, 160, 120, 30);
-    camera2.setVideoMode(PixelFormat.kYUYV, 160, 120, 30);
-
-    //set up auton chooser
-    // driveTheRobotPlease();
-   
-    m_chooser.addOption("Wave one time test auto", testAuto2);
-    m_chooser.addOption("Wave two times test auto", testAuto1);
-    
-    SmartDashboard.putData("Auto choices", m_chooser);
-
-    // 4 motors on 0, 1, 2, 3
-    // 2 (back) and 0 (front) are right side drive
-    // 1 (front) and 3 (back) are left side drive
-    // the drivetrain motors are controlled through RevRobotics Spark Controllers.
-    // initialize the motors defined above
-
-
-    //Changed to can to test something
-    //m_frontLeft = new Spark(1);
-    m_frontLeft = new CANSparkMax(2, com.revrobotics.CANSparkMaxLowLevel.MotorType.kBrushless);
-
-    m_rearLeft = new CANSparkMax(1, com.revrobotics.CANSparkMaxLowLevel.MotorType.kBrushless);
-    m_left = new MotorControllerGroup(m_frontLeft, m_rearLeft);
-    m_frontRight = new CANSparkMax(4, com.revrobotics.CANSparkMaxLowLevel.MotorType.kBrushless);
-    m_rearRight = new CANSparkMax(3, com.revrobotics.CANSparkMaxLowLevel.MotorType.kBrushless);
-    m_right = new MotorControllerGroup(m_frontRight, m_rearRight);
-    
-    /*
-    Base motor controller initiallization for drive train via CAN
-    leftFrontSteeringMotor = new CANSparkMax(leftDeviceID, MotorType.kBrushless);
-    leftFrontDriveMotor = new CANSparkMax(rightDeviceID, MotorType.kBrushless);
-    */
-    // init the drive
-    m_drive = new DifferentialDrive(m_left, m_right);
-   
- 
-    // init the controllers
-    m_Controller_1 = new XboxController(0);
-    m_Controller_2 = new XboxController(1);
+    if (RobotBase.isReal()) {
+      DataLogManager.start("/media/sda1");
+      // Instantiate our RobotContainer.
+      // Record both DS control and joystick data
+      DriverStation.startDataLog(DataLogManager.getLog());
+      if (isReal())
+        Timer.delay(10);// allow navx to init Chief Delphi post fix intermiitent trajectory failures
+                        // after start up
+    }
+    m_robotContainer = new RobotContainer();
 
   }
 
+  @Override
+  public void robotPeriodic() {
+    // Runs the Scheduler. This is responsible for polling buttons, adding
+    // newly-scheduled
+    // commands, running already-scheduled commands, removing finished or
+    // interrupted commands,
+    // and running subsystem periodic() methods. This must be called from the
+    // robot's periodic
+    // block in order for anything in the Command-based framework to work.
+    CommandScheduler.getInstance().run();
 
-  // These two methods are for autonomous control
+    loopCtr++;
 
-  /** This function is run once each time the robot enters autonomous mode. */
+    if (loopCtr >= 100) {
+
+      m_robotContainer.m_drive.ALL_CANOK = m_robotContainer.m_drive.checkCANOK();
+        
+
+      loopCtr = 0;
+    }
+
+    SmartDashboard.putNumber("LP", lpctra++);
+
+    // m_loop.poll();
+    if (RobotBase.isSimulation())
+      m_robotContainer.m_fieldSim.periodic();
+
+  }
+
+  /** This function is called once each time the robot enters Disabled mode. */
+  @Override
+  public void disabledInit() {
+    m_disableStartTime = 0;
+    firstScan = true;
+
+    autoHasRun = false;
+    // CommandScheduler.getInstance().cancelAll();
+    //
+  }
+
+  @Override
+  public void disabledPeriodic() {
+
+    if (!m_robotContainer.m_drive.isbraked()) {
+      if (m_disableStartTime == 0)
+        m_disableStartTime = Timer.getFPGATimestamp();
+
+      if (m_disableStartTime != 0 && Timer.getFPGATimestamp() > m_disableStartTime + 3) {
+        m_robotContainer.m_drive.setIdleMode(false);
+      }
+    }
+
+  }
+
+  /**
+   * This autonomous runs the autonomous command selected by your
+   * {@link RobotContainer} class.
+   */
   @Override
   public void autonomousInit() {
-    // encoder1.setMaxPeriod(5);
-    // encoder2.setMaxPeriod(5);
-    // encoder1.reset();
-    // encoder2.reset();
-    //
-    m_timer.reset();
-    m_timer.start();
-    m_rearLeft.setIdleMode(IdleMode.kBrake);
-    m_rearRight.setIdleMode(IdleMode.kBrake);
-    m_frontLeft.setIdleMode(IdleMode.kBrake);
-    m_frontRight.setIdleMode(IdleMode.kBrake);
-    state = 1;
+
+    autoHasRun = false;
+
+    Shuffleboard.startRecording();
+
+    m_robotContainer.m_drive.gyroStartPitch = m_robotContainer.m_drive.getGyroPitch();
+
+    m_robotContainer.m_drive.m_fieldOriented = false;
+
+    m_robotContainer.m_drive.setIdleMode(true);
+
    
-    //auto selector
-    m_autoSelected = m_chooser.getSelected();
-    System.out.println("Auto selected" + m_autoSelected);
+    m_robotContainer.m_drive.setClosedLoop(true);
+
+
   }
 
   /** This function is called periodically during autonomous. */
   @Override
   public void autonomousPeriodic() {
+    if (RobotBase.isSimulation())
+      m_robotContainer.m_fieldSim.periodic();
 
-  
-    //m_time is the current value of the timer
-    double m_time = m_timer.get();
-  
-
-  
-    
-    switch (m_autoSelected) {
-    case testAuto1:
-       
-        break;
-
-        case testAuto2: 
-      
-        break;
-        
-        
-
-       
-
-      
+    if (!autoHasRun && Timer.getFPGATimestamp() > startTime + m_startDelay
+        && autonomousCommand != null) {
+      autonomousCommand.schedule();
+      autoHasRun = true;
     }
-   
-    
-   
-}
+  }
 
-  
-
-  // these next two methods are for user control
-
-  /**
-   * This function is called once each time the robot enters teleoperated mode.
-   */
   @Override
   public void teleopInit() {
-    CameraServer.startAutomaticCapture();
-   
-    m_rearLeft.setIdleMode(IdleMode.kCoast);
-    m_rearRight.setIdleMode(IdleMode.kCoast);
-    m_frontLeft.setIdleMode(IdleMode.kCoast);
-    m_frontRight.setIdleMode(IdleMode.kCoast);
-   
-   
+    // This makes sure that the autonomous stops running when
+    // teleop starts running. If you want the a
+    // continue until interrupted by another command, remove
+    // this line or comment it out.
+
+    if (!autoHasRun)
+      m_robotContainer.m_drive.gyroStartPitch = m_robotContainer.m_drive.getGyroPitch();
+
+    if (autoHasRun)
+
+      m_robotContainer.m_drive.fieldOrientOffset = 180;
+
+    m_robotContainer.m_drive.setClosedLoop(false);
+
+    autoHasRun = false;
+
+    m_robotContainer.m_drive.resetGyro();
+
+
+    m_robotContainer.m_drive.setIdleMode(true);
+
+
+    m_robotContainer.m_drive.m_fieldOriented = false;
   }
 
+  /** This function is called periodically during operator control. */
   @Override
   public void teleopPeriodic() {
-m_timer.start();
+    if (RobotBase.isSimulation())
+      m_robotContainer.m_fieldSim.periodic();
 
-    //the code below controls scotts favorite thing the boost
-    double drive_multiplier;
-    if (m_Controller_1.getAButton() == true) {
-      drive_multiplier = 1;
-    } else {
-      drive_multiplier = .5;
-    }
-    double m_drive_x = MathUtil.applyDeadband(m_Controller_1.getRawAxis(0), 0.1) * drive_multiplier;
-    double m_drive_y = MathUtil.applyDeadband(m_Controller_1.getRawAxis(1), .1) * drive_multiplier;
-    
   }
 
-  // these two methods are for test. used to test robot code.
-
-  /** This function is called once each time the robot enters test mode. */
   @Override
   public void testInit() {
-    CameraServer.startAutomaticCapture();
-    m_timer.reset();
+    // Cancels all running commands at the start of test mode.
+    m_robotContainer.m_drive.setIdleMode(true);
+
+    CommandScheduler.getInstance().cancelAll();
+
   }
 
   /** This function is called periodically during test mode. */
@@ -263,4 +202,11 @@ m_timer.start();
   public void testPeriodic() {
 
   }
+
+  @Override
+  public void simulationPeriodic() {
+    m_robotContainer.m_fieldSim.periodic();
+    // m_robotContainer.simulationPeriodic();
+  }
+
 }

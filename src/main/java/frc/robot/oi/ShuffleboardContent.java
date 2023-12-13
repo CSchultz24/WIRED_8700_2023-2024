@@ -1,24 +1,23 @@
-// Copyright (c) FIRST and other WPILib contributors.
-// Open Source Software; you can modify and/or share it under the terms of
-// the WPILib BSD license file in the root directory of this project.
-
-package frc.robot.utils;
+package frc.robot.oi;
 
 import java.util.Map;
+
+import com.ctre.phoenix.sensors.CANCoderFaults;
 
 import edu.wpi.first.wpilibj.shuffleboard.BuiltInLayouts;
 import edu.wpi.first.wpilibj.shuffleboard.Shuffleboard;
 import edu.wpi.first.wpilibj.shuffleboard.ShuffleboardLayout;
 import edu.wpi.first.wpilibj.shuffleboard.ShuffleboardTab;
+import frc.robot.Constants.DriveConstants.ModulePosition;
 import frc.robot.subsystems.DriveSubsystem;
 import frc.robot.subsystems.SwerveModuleSM;
+import frc.robot.CTRECanCoder;
 
-/** Add your docs here. */
 public class ShuffleboardContent {
+    
+    private int m_moduleNumber;
 
-        private static int locationIndex;
-
-        // static ShuffleboardLayout boolsLayout;
+        static ShuffleboardLayout boolsLayout;
 
         public ShuffleboardContent() {
 
@@ -26,26 +25,25 @@ public class ShuffleboardContent {
 
         public static void initBooleanShuffleboard(SwerveModuleSM m_sm) {
 
-                locationIndex = m_sm.m_locationIndex;
-
-                String abrev = m_sm.modAbrev[locationIndex];
+                int m_moduleNumber = m_sm.m_locationIndex;
+                String abrev = m_sm.modAbrev[m_moduleNumber];
 
                 ShuffleboardTab x = Shuffleboard.getTab("Drivetrain");
 
                 x.addBoolean("DriveCAN" + abrev, () -> m_sm.driveMotorConnected)
-                                .withPosition(8, locationIndex);
+                                .withPosition(8, m_moduleNumber);
                 x.addBoolean("TurnCAN" + abrev, () -> m_sm.turnMotorConnected)
-                                .withPosition(9, locationIndex);
+                                .withPosition(9, m_moduleNumber);
 
         }
 
         public static void initDriveShuffleboard(SwerveModuleSM m_sm) {
 
-                int locationIndex = m_sm.m_locationIndex;
-                String abrev = m_sm.modAbrev[locationIndex];
-                String driveLayout = abrev + " Drive";
+                int m_moduleNumber = m_sm.m_locationIndex;
+                String abrev = m_sm.modAbrev[m_moduleNumber];
+                String driveLayout = m_sm.getModuleName(m_moduleNumber) + " Drive";
                 ShuffleboardLayout drLayout = Shuffleboard.getTab("Drivetrain")
-                                .getLayout(driveLayout, BuiltInLayouts.kList).withPosition(locationIndex * 2, 0)
+                                .getLayout(driveLayout, BuiltInLayouts.kList).withPosition(m_moduleNumber * 2, 0)
                                 .withSize(2, 2).withProperties(Map.of("Label position", "LEFT"));
 
                 drLayout.addNumber("Drive Speed MPS " + abrev, () -> m_sm.getDriveVelocity());
@@ -64,24 +62,26 @@ public class ShuffleboardContent {
         }
 
         public static void initTurnShuffleboard(SwerveModuleSM m_sm) {
-
-                int locationIndex = m_sm.m_locationIndex;
-                String abrev = m_sm.modAbrev[locationIndex];
-                String turnLayout = abrev + " Turn";
+                int m_moduleNumber = m_sm.m_locationIndex;
+                String abrev = m_sm.modAbrev[m_moduleNumber];
+                String turnLayout = m_sm.getModuleName(m_moduleNumber) + " Turn";
 
                 ShuffleboardLayout tuLayout = Shuffleboard.getTab("Drivetrain")
-                                .getLayout(turnLayout, BuiltInLayouts.kList).withPosition(locationIndex * 2, 2)
+                                .getLayout(turnLayout, BuiltInLayouts.kList).withPosition(m_moduleNumber * 2, 2)
                                 .withSize(2, 3).withProperties(Map.of("Label position", "LEFT"));
 
                 tuLayout.addNumber("Turn Setpoint Deg " + abrev, () -> m_sm.angle);
 
                 tuLayout.addNumber("Turn Enc Pos " + abrev,
+                                () -> m_sm.getTurnAngleDegs() % 360);
+
+                tuLayout.addNumber("Act Ang Deg " + abrev,
                                 () -> m_sm.getTurnAngleDegs());
 
-                tuLayout.addNumber("TurnOutput" + abrev,
+                tuLayout.addNumber("TurnAngleOut" + abrev,
                                 () -> m_sm.m_turnMotor.getAppliedOutput());
 
-                tuLayout.addNumber("CancoderPosition" + abrev, () -> m_sm.m_turnCANcoder.getMyPosition());
+                tuLayout.addNumber("Position" + abrev, () -> m_sm.m_turnCANcoder.getPosition());
 
                 tuLayout.addNumber("Current Amps" + abrev, () -> m_sm.getTurnCurrent());
 
@@ -94,36 +94,37 @@ public class ShuffleboardContent {
 
         public static void initCoderBooleanShuffleboard(SwerveModuleSM m_sm) {
 
-                int locationIndex = m_sm.m_locationIndex;
-                String abrev = m_sm.modAbrev[locationIndex];
-                ShuffleboardTab x = Shuffleboard.getTab("CanCoders");
+                int m_moduleNumber = m_sm.m_locationIndex;
+                String abrev = m_sm.modAbrev[m_moduleNumber];
 
-                x.addBoolean("CANOK" + abrev, () -> m_sm.turnCoderConnected)
-                                .withPosition(8, locationIndex);
-                x.addBoolean("Fault" + abrev, () -> m_sm.m_turnCANcoder.getFaulted())
-                                .withPosition(9, locationIndex);
+                ShuffleboardTab x = Shuffleboard.getTab("CanCoders");
+                String error;
+                x.addBoolean("CANOK" + abrev, () -> m_sm.turnCoderConnected  )               
+                      .withPosition(8, m_moduleNumber);
+                // x.addBoolean("Fault" + abrev, () -> m_sm.m_turnCANcoder.getFaults()
+                // .withPosition(9, m_moduleNumber));
 
         }
 
         public static void initCANCoderShuffleboard(SwerveModuleSM m_sm) {
-                int locationIndex = m_sm.m_locationIndex;
-                String abrev = m_sm.modAbrev[locationIndex];
-                String canCoderLayout = abrev + " CanCoder";
+                int m_moduleNumber = m_sm.m_locationIndex;
+                ;
+                String abrev = m_sm.modAbrev[m_moduleNumber];
+                String canCoderLayout = m_sm.getModuleName(m_moduleNumber) + " CanCoder";
 
                 ShuffleboardLayout coderLayout = Shuffleboard.getTab("CanCoders")
-                                .getLayout(canCoderLayout, BuiltInLayouts.kList).withPosition(locationIndex * 2, 0)
+                                .getLayout(canCoderLayout, BuiltInLayouts.kList).withPosition(m_moduleNumber * 2, 0)
                                 .withSize(2, 3).withProperties(Map.of("Label position", "LEFT"));
 
                 coderLayout.addNumber("Position" + abrev,
-                                () -> m_sm.m_turnCANcoder.getMyPosition());
+                                () -> m_sm.m_turnCANcoder.getPosition());
                 coderLayout.addNumber("Abs Position" + abrev,
                                 () -> m_sm.m_turnCANcoder.getAbsolutePosition());
                 coderLayout.addNumber("Velocity" + abrev,
-                                () -> m_sm.m_turnCANcoder.getVelValue());
+                                () -> m_sm.m_turnCANcoder.getVelocity());
                 coderLayout.addString(" MagField " + abrev,
                                 () -> m_sm.m_turnCANcoder.getMagnetFieldStrength().toString());
-                coderLayout.addNumber("Battery Volts" + abrev,
-                                () -> m_sm.m_turnCANcoder.getBatValue());
+
                 coderLayout.addNumber("Bus Volts" + abrev,
                                 () -> m_sm.m_turnCANcoder.getBusVoltage());
 
@@ -139,10 +140,6 @@ public class ShuffleboardContent {
                 ShuffleboardTab drLayout1 = Shuffleboard.getTab("Drivetrain");
 
                 drLayout1.addBoolean("FieldOr", () -> drive.m_fieldOriented).withPosition(8, 4)
-
-                                .withSize(1, 1);
-
-                drLayout1.addBoolean("OpenLoop", () -> drive.isOpenLoop).withPosition(8, 4)
 
                                 .withSize(1, 1);
                 drLayout1.addNumber("GyroYaw", () -> drive.getHeadingDegrees()).withPosition(9, 4)
