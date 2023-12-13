@@ -13,7 +13,7 @@ import com.ctre.phoenix.sensors.MagnetFieldStrength;
 
 import com.ctre.phoenix.sensors.WPI_CANCoder;
 
-import edu.wpi.first.util.sendable.SendableBuilder;
+import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 
 /** Add your docs here. */
 public class CTRECanCoder extends WPI_CANCoder {
@@ -119,15 +119,6 @@ public class CTRECanCoder extends WPI_CANCoder {
 
     public double magnetStrengthTstmp() {
         return this.getLastTimestamp();
-    }
-
-    @Override
-    public void initSendable(SendableBuilder builder){
-        builder.setSmartDashboardType("CTRECanCoder");
-   
-
-
-
     }
 
 }
