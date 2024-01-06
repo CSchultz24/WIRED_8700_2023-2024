@@ -232,7 +232,7 @@ public class DriveSubsystem extends SubsystemBase {
 
     m_gyro.reset();
 
-    resetModuleEncoders();
+    //resetModuleEncoders();
 
     setIdleMode(true);
 
@@ -251,7 +251,7 @@ public class DriveSubsystem extends SubsystemBase {
       thetaPID.setP(.005);
 
     }
-    resetEncoders();
+    //resetEncoders();
     // m_Field2d = new Field2d();
 
     // SmartDashboard.putData(m_Field2d);

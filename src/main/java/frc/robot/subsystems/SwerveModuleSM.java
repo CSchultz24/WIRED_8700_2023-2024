@@ -13,7 +13,7 @@ import com.revrobotics.CANSparkMaxLowLevel;
 import com.revrobotics.CANSparkMaxLowLevel.MotorType;
 import com.revrobotics.REVPhysicsSim;
 import com.revrobotics.RelativeEncoder;
-
+import com.revrobotics.AbsoluteEncoder;
 import edu.wpi.first.math.controller.PIDController;
 import edu.wpi.first.math.controller.SimpleMotorFeedforward;
 import edu.wpi.first.math.geometry.Pose2d;
@@ -174,7 +174,7 @@ public class SwerveModuleSM extends SubsystemBase {
         / 60);
 
     m_turnEncoder = m_turnMotor.getEncoder();
-
+    
     m_turnEncoder.setPositionConversionFactor(ModuleConstants.kTurningDegreesPerEncRev);
 
     SmartDashboard.putNumber("TDPR", ModuleConstants.kTurningDegreesPerEncRev);
